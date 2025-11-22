@@ -101,6 +101,22 @@ async function tickets(customSearchmenu) {
     }
 }
 
+async function tramites(idTramite) {
+    try {
+        const res = await session.get(
+            `https://portaldocliente.praxio.com.br/Ticket/TicketPrincipal/${idTramite}`
+        );
+
+        const document = parse(res.data);
+        const tramitesJSON = getCleanTramites(document)
+
+        return tramitesJSON
+    } catch (error) {
+        console.error("Erro tickets:", error);
+        throw error;
+    }
+}
+
 async function getHeaders(document) {
     const headers = document.querySelectorAll(".dxgvHeader_Metropolis");
 
@@ -121,6 +137,9 @@ async function getCleanTickets(document) {
         const cells = row.querySelectorAll("td");
         const newTicket = {};
 
+        const idTramite = row.querySelector('a').getAttribute("href").split('/Ticket/TicketPrincipal/')[1]
+        newTicket.idTramite = idTramite
+
         cells.forEach((cell, i) => {
             newTicket[headers[i]] = cell.innerText.trim();
         });
@@ -129,6 +148,24 @@ async function getCleanTickets(document) {
     });
 
     return ticketsJSON;
+}
+
+function getCleanTramites(document) {
+    const histTramites = document.querySelectorAll('.dialogdiv')
+
+    const arrayTramites = Array.from(histTramites).map((tramite) => ({
+        sender: tramite.querySelectorAll('.name')[0].innerText.trim().split(' ')[0],
+        private: tramite.querySelector('.body').classList.value.includes('privado'),
+        message: tramite.querySelector('.text')?.innerText
+            .replace(/\n|\r/g, ' ')           // Quebra de linha
+            .replace(/&nbsp;/g, ' ')          // Espaços HTML
+            .replace(/\s+/g, ' ')             // Remove espaços duplicados
+            .trim(),
+        status: tramite.querySelectorAll('.statusHistorico')[0].innerText.split('Status: ')[1].trim(),
+        datetime: tramite.querySelectorAll('.time')[0].innerText.trim()
+    }))
+
+    return arrayTramites.reverse()
 }
 
 app.get('/tickets/:customSearchmenu', login, async (req, res) => {
@@ -141,6 +178,19 @@ app.get('/tickets/:customSearchmenu', login, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Erro ao buscar tickets" });
+    }
+});
+
+app.get('/tramites/:idTramite', login, async (req, res) => {
+    const { idTramite } = req.params;
+
+    try {
+        const result = await tramites(idTramite);
+        res.json(result);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao buscar tramites" });
     }
 });
 
